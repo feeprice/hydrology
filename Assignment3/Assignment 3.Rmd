@@ -3,10 +3,31 @@ title: "Assignment 3"
 author: "Fiona Price"
 date: "2024-10-22"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+#Load in packages
+library(here)
+library(tidyr)
+library(lubridate)
+library(dplyr)
+
+#Load in data
+RDU_precip <- read.csv(file = 
+    here("./Assignment3/Data Raw/RDU_precip_daily_cm_1942_to_2020-8-10.csv"),
+    stringsAsFactors = TRUE)
+#Convert class of date column
+RDU_precip$DATE <- as.Date(RDU_precip$DATE, format = "%Y-%m-%d")
+#Add columns for months and years and remove first 5 columns (because they are
+#the same for all the data)
+RDU_precip_clean <- RDU_precip %>% 
+  mutate(year = year(DATE)) %>% 
+  mutate(month = month(DATE)) %>% 
+  select(DATE, PRCP, SNOW, SNWD, year, month)
+
+
 ```
 
 ## R Markdown
