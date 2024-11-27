@@ -3,28 +3,168 @@ title: "Assignment 4"
 author: "Fiona Price"
 date: "2024-11-25"
 output: pdf_document
+editor_options: 
+  chunk_output_type: console
 ---
+#10-YEAR DROUGHT
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+#Load in packages
+library(here)
+library(tidyr)
+library(lubridate)
+library(dplyr)
+library(zoo)
+
+#Load in data
+inflow <- read.csv(file = 
+    here("./Assignment 4/Data Raw/neuse_river_at_falls_02087183_daily_flow_updated.csv"),
+    stringsAsFactors = TRUE)
+
+outflow <- read.csv(file = 
+    here("./Assignment 4/Data Raw/neuse_river_at_clayton_02087500_daily_flow_updated.csv"),
+    stringsAsFactors = TRUE)
+
+
 ```
 
-## R Markdown
+```{r inflow, 10-year drought, all years} 
+#Calculate moving average for inflow
+moving_avg_inflow <- rollmean(inflow$daily_mean_discharge_cfs, 
+                              k = 7, fill = NA, align = "center")
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+#Turn into df 
+inflow <- data.frame(
+  inflow = inflow,
+  moving_avg = moving_avg_inflow)
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+#Find minimum for each year
+inflow_mins <- inflow %>% 
+  group_by(inflow.year) %>% 
+  summarise(yearly_min = min(moving_avg))
 
-```{r cars}
-summary(cars)
+#Rank
+inflow_mins <- inflow_mins %>% 
+  mutate(rank = rank(yearly_min,
+                        ties.method = "min"))
+#NOTE TO FI: HAVE TO FIX NA DATA FOR 1970
+inflow_rp <- inflow_mins %>% 
+  mutate(number_events = 55) %>% 
+  mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
+  mutate(return_period = (number_events + 1)/rank)
+
 ```
 
-## Including Plots
+```{r inflow, 10-year drought, 1981-2000} 
+#Filter the minimum per year inflow df to only include 1981-2000.
+early_inflow <- inflow_mins %>% 
+  filter(inflow.year >= 1981 & inflow.year <= 2000) %>% 
+  mutate(rank = rank(yearly_min,
+                        ties.method = "min"))
+#Find the return period.
+early_inflow_rp <- early_inflow %>% 
+  mutate(number_events = 20) %>% 
+  mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
+  mutate(return_period = (number_events + 1)/rank)
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r inflow, 10-year drought, 2000-2024} 
+#Filter the minimum per year inflow df to only include data from 2000 and beyond.
+late_inflow <- inflow_mins %>% 
+  filter(inflow.year >= 2000) %>% 
+  mutate(rank = rank(yearly_min,
+                        ties.method = "min"))
+#Find the return period.
+late_inflow_rp <- late_inflow %>% 
+  mutate(number_events = 25) %>% 
+  mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
+  mutate(return_period = (number_events + 1)/rank)
+
+```
+
+```{r outflow, 10-year drought, all years} 
+#Calculate moving average for inflow
+moving_avg_outflow <- rollmean(outflow$daily_mean_discharge_cfs, 
+                              k = 7, fill = NA, align = "center")
+
+#Turn into df 
+outflow <- data.frame(
+  outflow = outflow,
+  moving_avg = moving_avg_outflow)
+
+#Find minimum for each year
+outflow_mins <- outflow %>% 
+  group_by(outflow.year) %>% 
+  summarise(yearly_min = min(moving_avg))
+
+#Rank
+outflow_mins <- outflow_mins %>% 
+  mutate(rank = rank(yearly_min,
+                        ties.method = "min"))
+#NOTE TO FI: HAVE TO FIX NA DATA FOR 1970
+outflow_rp <- outflow_mins %>% 
+  mutate(number_events = 98) %>% 
+  mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
+  mutate(return_period = (number_events + 1)/rank)
+```
+
+```{r outflow, 10-year drought, 1981-2000} 
+#Filter the minimum per year inflow df to only include 1981-2000.
+early_outflow <- outflow_mins %>% 
+  filter(outflow.year >= 1981 & outflow.year <= 2000) %>% 
+  mutate(rank = rank(yearly_min,
+                        ties.method = "min"))
+#Find the return period.
+early_outflow_rp <- early_outflow %>% 
+  mutate(number_events = 20) %>% 
+  mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
+  mutate(return_period = (number_events + 1)/rank)
+
+```
+
+```{r outflow, 10-year drought, 2000-2024} 
+#Filter the minimum per year inflow df to only include data from 2000 and beyond.
+late_outflow <- outflow_mins %>% 
+  filter(outflow.year >= 2000) %>% 
+  mutate(rank = rank(yearly_min,
+                        ties.method = "min"))
+#Find the return period.
+late_outflow_rp <- late_outflow %>% 
+  mutate(number_events = 25) %>% 
+  mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
+  mutate(return_period = (number_events + 1)/rank)
+
+```
+
+#50-YEAR FLOOD
+```{r inflow, 50-year flood, all years} 
+#Using moving averages for inflow found above, find maximum for each year.
+inflow_maxes <- inflow %>% 
+  group_by(inflow.year) %>% 
+  summarise(yearly_max = max(moving_avg))
+
+#Rank
+inflow_maxes <- inflow_maxes %>% 
+  mutate(rank = rank(-yearly_max,
+                        ties.method = "max"))
+#NOTE TO FI: HAVE TO FIX NA DATA FOR 1970
+inflow_flood_rp <- inflow_maxes %>% 
+  mutate(number_events = 55) %>% 
+  mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
+  mutate(return_period = (number_events + 1)/rank)
+
+```
+
+```{r inflow, 50-year flood, 1981-2000} 
+#Filter the max per year inflow df to only include 1981-2000.
+early_inflow_max <- inflow_maxes %>% 
+  filter(inflow.year >= 1981 & inflow.year <= 2000) %>% 
+  mutate(rank = rank(-yearly_max,
+                        ties.method = "max"))
+
+#Find the return period.
+early_inflow_rp <- early_inflow %>% 
+  mutate(number_events = 20) %>% 
+  mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
+  mutate(return_period = (number_events + 1)/rank)
