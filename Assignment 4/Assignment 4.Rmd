@@ -163,8 +163,73 @@ early_inflow_max <- inflow_maxes %>%
   mutate(rank = rank(-yearly_max,
                         ties.method = "max"))
 
+
 #Find the return period.
-early_inflow_rp <- early_inflow %>% 
+early_inflow_flood_rp <- early_inflow_max %>% 
   mutate(number_events = 20) %>% 
   mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
   mutate(return_period = (number_events + 1)/rank)
+```
+
+```{r inflow, 50-year flood, 2000-2024} 
+#Filter the max per year inflow df to only include data for 2000 and beyond.
+late_inflow_max <- inflow_maxes %>% 
+  filter(inflow.year >= 2000) %>% 
+  mutate(rank = rank(-yearly_max,
+                        ties.method = "max"))
+
+
+#Find the return period.
+late_inflow_flood_rp <- late_inflow_max %>% 
+  mutate(number_events = 25) %>% 
+  mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
+  mutate(return_period = (number_events + 1)/rank)
+```
+
+```{r outflow, 50-year flood, all years} 
+#Using moving averages for inflow found above, find maximum for each year.
+outflow_maxes <- outflow %>% 
+  group_by(outflow.year) %>% 
+  summarise(yearly_max = max(moving_avg))
+
+#Rank
+outflow_maxes <- outflow_maxes %>% 
+  mutate(rank = rank(-yearly_max,
+                        ties.method = "max"))
+#NOTE TO FI: HAVE TO FIX NA DATA FOR 1970
+outflow_flood_rp <- outflow_maxes %>% 
+  mutate(number_events = 98) %>% 
+  mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
+  mutate(return_period = (number_events + 1)/rank)
+
+```
+
+```{r outflow, 50-year flood, 1981-2000} 
+#Filter the max per year inflow df to only include 1981-2000.
+early_outflow_max <- outflow_maxes %>% 
+  filter(outflow.year >= 1981 & outflow.year <= 2000) %>% 
+  mutate(rank = rank(-yearly_max,
+                        ties.method = "max"))
+
+
+#Find the return period.
+early_outflow_flood_rp <- early_outflow_max %>% 
+  mutate(number_events = 20) %>% 
+  mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
+  mutate(return_period = (number_events + 1)/rank)
+```
+
+```{r outflow, 50-year flood, 2000-2024} 
+#Filter the max per year outflow df to only include data for 2000 and beyond.
+late_outflow_max <- outflow_maxes %>% 
+  filter(outflow.year >= 2000) %>% 
+  mutate(rank = rank(-yearly_max,
+                        ties.method = "max"))
+
+
+#Find the return period.
+late_outflow_flood_rp <- late_outflow_max %>% 
+  mutate(number_events = 25) %>% 
+  mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
+  mutate(return_period = (number_events + 1)/rank)
+```
