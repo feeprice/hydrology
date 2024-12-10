@@ -15,6 +15,9 @@ library(tidyr)
 library(lubridate)
 library(dplyr)
 library(zoo)
+library(fasstr)
+library(ggplot2)
+library(cowplot)
 
 flows <- read.csv(file = 
     here("./Assignment 4/Data Raw/neuse_river_at_clayton_02087500_daily_flow_updated.csv"),
@@ -22,20 +25,20 @@ flows <- read.csv(file =
 ```
 
 ```{r, 10-year drought, 1981 and beyond} 
-filtered_flows <- flows %>% 
-  filter(flows$year >= 1981)
-
 #Calculate moving average for inflow
-moving_avg_flows <- rollmean(filtered_flows$daily_mean_discharge_cfs, 
+moving_avg_flows <- rollmean(flows$daily_mean_discharge_cfs, 
                               k = 7, fill = NA, align = "center")
 
 #Turn into df 
 flows <- data.frame(
-  flows = filtered_flows,
+  flows = flows,
   moving_avg = moving_avg_flows)
 
+filtered_flows <- flows %>% 
+  filter(flows$flows.year >= 1981)
+
 #Find minimum for each year
-flow_mins <- flows %>% 
+flow_mins <- filtered_flows %>% 
   group_by(flows.year) %>% 
   summarise(yearly_min = min(moving_avg))
 
@@ -47,22 +50,22 @@ flow_mins <- flow_mins %>%
 #Find return period
 drought_rp <- flow_mins %>% 
   mutate(number_events = 98) %>% 
-  mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
   mutate(return_period = (number_events + 1)/rank)
 ```
 
 ```{r 10-year drought, 1981-2000} 
 #Filter the minimum per year inflow df to only include 1981-2000.
 early_flows <- flows %>% 
-  filter(year >= 1981 & year <= 2000)
+  filter(flows.year >= 1981 & flows.year <= 2000)
 
 #Calculate moving average for inflow
-moving_avg_early <- rollmean(early_flows$daily_mean_discharge_cfs, 
+moving_avg_early <- rollmean(early_flows$flows.daily_mean_discharge_cfs, 
                               k = 7, fill = NA, align = "center")
 #Turn into df 
 early_flows <- data.frame(
-  flows = early_flows,
+  early_flows,
   moving_avg = moving_avg_early)
+#early_flows <- early_flows[!is.na(early_flows$moving_avg), ]
 
 #Find minimum for each year
 early_flow_mins <- early_flows %>% 
@@ -77,21 +80,20 @@ early_flow_mins <- early_flow_mins %>%
 #Find return period
 early_drought_rp <- early_flow_mins %>% 
   mutate(number_events = 20) %>% 
-  mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
   mutate(return_period = (number_events + 1)/rank)
 ```
 
 ```{r 10-year drought, 2000 to present} 
 #Filter the minimum per year inflow df to only include 2000 and beyond
 late_flows <- flows %>% 
-  filter(year > 2000)
+  filter(flows.year > 2000)
 
 #Calculate moving average for inflow
-moving_avg_late <- rollmean(late_flows$daily_mean_discharge_cfs, 
+moving_avg_late <- rollmean(late_flows$flows.daily_mean_discharge_cfs, 
                               k = 7, fill = NA, align = "center")
 #Turn into df 
 late_flows <- data.frame(
-  flows = late_flows,
+  late_flows,
   moving_avg = moving_avg_late)
 
 #Find minimum for each year
@@ -107,55 +109,90 @@ late_flow_mins <- late_flow_mins %>%
 #Find return period
 late_drought_rp <- late_flow_mins %>% 
   mutate(number_events = 24) %>% 
-  mutate(plotting_position = (100*(2*rank - 1))/(number_events)) %>% 
   mutate(return_period = (number_events + 1)/rank)
 ```
 
 ```{r 50-year flood}
-#Rank all events
-flood_flows <- flows %>% 
-  filter(year >= 1981) %>% 
-  mutate(rank = rank(-daily_mean_discharge_cfs,
+#Final annual max
+annual_maxes <- flows %>% 
+  filter(flows.year >= 1981) %>% 
+  group_by(flows.year) %>% 
+  summarise(yearly_max = max(flows.daily_mean_discharge_cfs)) 
+
+#Rank annual maxes
+max_flows <- annual_maxes %>% 
+  mutate(rank = rank(-yearly_max,
                      ties.method = "max"))
 
-flood_rp <- flood_flows %>% 
-  mutate(number_events = nrow(flood_flows)) %>% 
+#Find return period
+flood_rp <- max_flows %>% 
+  mutate(number_events = nrow(max_flows)) %>% 
   mutate(return_period = (number_events + 1)/rank)
+
+#Interpolate to 2075
+model <- lm(yearly_max ~ flows.year, data = annual_maxes)
+future_years <- data.frame(flows.year = 2025:2075)
+predicted_floodflow <- predict(model, newdata = future_years)
+predicted_data <- data.frame(
+  flows.year = future_years$flows.year,          # Use the years from future_years
+  yearly_max = predicted_floodflow  # Use the predictions as the max flows
+)
+
+#Combine data
+max_flows_interpolated <- rbind(annual_maxes, predicted_data)
+
+#Rank all events
+max_flows_interpolated <- max_flows_interpolated %>% 
+  filter(flows.year >= 1981) %>% 
+  mutate(rank = rank(-yearly_max,
+                     ties.method = "max"))
+
+#Find return period
+max_flood_rp <- max_flows_interpolated %>% 
+  mutate(number_events = nrow(max_flows_interpolated)) %>% 
+  mutate(return_period = (number_events + 1)/rank)
+
 ```
 
 ```{r 50-year flood, 1981-2000}
 #Rank all events
-early_flood_flows <- flows %>% 
-  filter(year >= 1981 & year <= 2000) %>% 
-  mutate(rank = rank(-daily_mean_discharge_cfs,
+max_flows_early <- annual_maxes %>% 
+  filter(flows.year >= 1981 & flows.year <2001) %>% 
+  mutate(rank = rank(-yearly_max,
                      ties.method = "max"))
 
-early_flood_rp <- early_flood_flows %>% 
-  mutate(number_events = nrow(flood_flows)) %>% 
+#Find return period
+max_flood_rp_early <- max_flows_early %>% 
+  mutate(number_events = nrow(max_flows_early)) %>% 
   mutate(return_period = (number_events + 1)/rank)
 ```
 
 ```{r 50-year flood, 2001-2024}
 #Rank all events
-late_flood_flows <- flows %>% 
-  filter(year > 2000) %>% 
-  mutate(rank = rank(-daily_mean_discharge_cfs,
+max_flows_late <- annual_maxes %>% 
+  filter(flows.year > 2000) %>% 
+  mutate(rank = rank(-yearly_max,
                      ties.method = "max"))
 
 #Find return period
-late_flood_rp <- late_flood_flows %>% 
-  mutate(number_events = nrow(flood_flows)) %>% 
+max_flood_rp_late <- max_flows_late %>% 
+  mutate(number_events = nrow(max_flows_late)) %>% 
   mutate(return_period = (number_events + 1)/rank)
 ```
 
 ```{r comparing mean discharge and max discharge, floods}
-#Only have max flow data for 2004 and beyond. Filter to only include those years.
+#Only have max flow data for 2004-2019. Filter to only include those years.
 mean_max_flows <- flows %>% 
-  filter(flows.year >= 2004)
+  filter(flows.year >= 2004 & flows.year <= 2019)
 
-#Rank all events (mean daily discharge)
+#Find the max annual mean discharge
 mean_flows <- mean_max_flows %>% 
-  mutate(rank = rank(-flows.daily_mean_discharge_cfs,
+  group_by(flows.year) %>% 
+  summarise(yearly_max = max(flows.daily_mean_discharge_cfs)) 
+
+#Rank all events
+mean_flows <- mean_flows %>% 
+  mutate(rank = rank(-yearly_max,
                      ties.method = "max"))
 
 #Find return period (mean daily discharge)
@@ -163,14 +200,241 @@ mean_flood_rp <- mean_flows %>%
   mutate(number_events = nrow(mean_flows)) %>% 
   mutate(return_period = (number_events + 1)/rank)
 
+#Find the max annual max discharge
+max_flows <- na.omit(mean_max_flows) %>% 
+  group_by(flows.year) %>% 
+  summarise(yearly_max = max(flows.daily_max_discharge_cfs)) 
+
 #Rank all events (max daily discharge)
-max_flows <- mean_max_flows %>% 
-  mutate(rank = rank(-flows.daily_max_discharge_cfs,
-                     ties.method = "max"))
+max_flows <- max_flows %>% 
+  mutate(rank = rank(-yearly_max, ties.method = "max"))
 
 #Find return period (max daily discharge)
 max_flood_rp <- max_flows %>% 
   mutate(number_events = nrow(max_flows)) %>% 
   mutate(return_period = (number_events + 1)/rank)
 
+```
+
+```{r }
+#Annual Max, all years
+outflow_overall_plot <-
+ggplot(annual_maxes,
+ aes(x = flows.year, y= yearly_max))+
+ geom_col(position="dodge")+
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))+
+labs(title="Neuse River Annual Maximum Daily Discharge, 1981-2024",
+ fontface="bold")+
+ ylab("Annual Maximum Daily Discharge (cfs)")+
+  geom_smooth(method = lm)+
+ xlab("Year") +
+   scale_x_continuous(n.breaks = 20, limits = c(1980, 2024), expand = c(0, 0)) 
+outflow_overall_plot
+
+#Before 2001
+outflow_before2000_plot <-
+ggplot(max_flows_early,
+ aes(x = flows.year, y= yearly_max))+
+    theme_minimal() +
+ geom_col(position="dodge")+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))+
+labs(title="Neuse River Annual Maximum Daily Discharge, 1981-2000",
+ fontface="bold")+
+ ylab("Annual Maximum Daily Discharge (cfs)")+
+  geom_smooth(method = lm)+
+ xlab("Year")
+outflow_before2000_plot
+
+#2001 and beyond
+outflow_after2000_plot <-
+ggplot(max_flows_late,
+ aes(x = flows.year, y= yearly_max))+
+      theme_minimal() +
+ geom_col(position="dodge")+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))+
+labs(title="Neuse River Annual Maximum Daily Discharge, 2001-2024",
+ fontface="bold")+
+ ylab("Annual Maximum Daily Discharge (cfs)")+
+  geom_smooth(method = lm)+
+ xlab("Year")
+outflow_after2000_plot
+
+annual_max_layout <- plot_grid(outflow_before2000_plot, outflow_after2000_plot)
+annual_max_layout
+
+```
+
+```{r 50-year flood}
+#50-year flood, before 2001
+max_flood_earlyplot <-
+ggplot(max_flows_early,
+ aes(x = flows.year, y= yearly_max))+
+    theme_minimal() +
+ geom_col(position="dodge")+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))+
+labs(title="Neuse River Annual Maximum Daily Discharge, 1981-2000",
+ fontface="bold")+
+ ylab("Annual Maximum Daily Discharge (cfs)")+
+ xlab("Year") +
+    geom_hline(yintercept = 19000, color = "red3", lty=1, size = 1) +
+   annotate("text", x = 1986, y = 17000, label = "50-Year Flood: ~19,000 cfs", color = "red3", vjust = -0.5) +
+    ylim(0,20000)
+max_flood_earlyplot
+
+#2001 and beyond
+max_flood_lateplot <-
+ggplot(max_flows_late,
+ aes(x = flows.year, y= yearly_max))+
+      theme_minimal() +
+ geom_col(position="dodge")+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))+
+labs(title="Neuse River Annual Maximum Daily Discharge, 2001-2024",
+ fontface="bold")+
+ ylab("Annual Maximum Daily Discharge (cfs)")+
+ xlab("Year") +
+  geom_hline(yintercept = 19000, color = "red3", lty=1, size = 1) +
+   annotate("text", x = 2008, y = 17000, label = "50-Year Flood: ~19,000 cfs", color = "red3", vjust = -0.5) +
+  ylim(0,20000)
+
+max_flood_lateplot
+
+max_flood_layout <- plot_grid(max_flood_earlyplot, max_flood_lateplot)
+max_flood_layout
+```
+
+```{r Medium floods}
+#21-year flood, before 2001
+med_flood_earlyplot <-
+ggplot(max_flows_early,
+ aes(x = flows.year, y= yearly_max))+
+    theme_minimal() +
+ geom_col(position="dodge")+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))+
+labs(title="Neuse River Annual Maximum Daily Discharge, 1981-2000",
+ fontface="bold")+
+ ylab("Annual Maximum Daily Discharge (cfs)")+
+ xlab("Year") +
+    geom_hline(yintercept = 19700, color = "blue", lty=1, size = 1) +
+   annotate("text", x = 1986, y = 18000, label = "21-Year Flood: ~19,700 cfs", color = "blue", vjust = -0.5) +
+    ylim(0,20000)
+med_flood_earlyplot
+
+#25-year flood, 2001 and beyond
+med_flood_lateplot <-
+ggplot(max_flows_late,
+ aes(x = flows.year, y= yearly_max))+
+      theme_minimal() +
+ geom_col(position="dodge")+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))+
+labs(title="Neuse River Annual Maximum Daily Discharge, 2001-2024",
+ fontface="bold")+
+ ylab("Annual Maximum Daily Discharge (cfs)")+
+ xlab("Year") +
+  geom_hline(yintercept = 18800, color = "blue", lty=1, size = 1) +
+   annotate("text", x = 2008, y = 17200, label = "25-Year Flood: ~18,800 cfs", color = "blue", vjust = -0.5) +
+  ylim(0,20000)
+
+med_flood_lateplot
+
+med_flood_layout <- plot_grid(med_flood_earlyplot, med_flood_lateplot)
+med_flood_layout
+```
+
+```{r Small flood}
+#10-year flood, before 2001
+small_flood_earlyplot <-
+ggplot(max_flows_early,
+ aes(x = flows.year, y= yearly_max))+
+    theme_minimal() +
+ geom_col(position="dodge")+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))+
+labs(title="Neuse River Annual Maximum Daily Discharge, 1981-2000",
+ fontface="bold")+
+ ylab("Annual Maximum Daily Discharge (cfs)")+
+ xlab("Year") +
+    geom_hline(yintercept = 12000, color = "darkgreen", lty=1, size = 1) +
+   annotate("text", x = 1986, y = 12000, label = "10-Year Flood: ~12,000 cfs", color = "darkgreen", vjust = -0.5) +
+    ylim(0,20000)
+small_flood_earlyplot
+
+#2001 and beyond
+small_flood_lateplot <-
+ggplot(max_flows_late,
+ aes(x = flows.year, y= yearly_max))+
+      theme_minimal() +
+ geom_col(position="dodge")+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))+
+labs(title="Neuse River Annual Maximum Daily Discharge, 2001-2024",
+ fontface="bold")+
+ ylab("Annual Maximum Daily Discharge (cfs)")+
+ xlab("Year") +
+  geom_hline(yintercept = 12000, color = "darkgreen", lty=1, size = 1) +
+   annotate("text", x = 2008, y = 13000, label = "10-Year Flood: ~12,000 cfs", color = "darkgreen", vjust = -0.5) +
+  ylim(0,20000)
+
+small_flood_lateplot
+
+small_flood_layout <- plot_grid(small_flood_earlyplot, small_flood_lateplot)
+small_flood_layout
+
+```
+
+```{r Drought plots}
+#Drought, 1981-2000
+mins_before2000_plot <-
+ggplot(early_flow_mins,
+ aes(x = flows.year, y= yearly_min))+
+ geom_col(position="dodge")+
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))+
+labs(title="Neuse River Annual Minimum Daily Discharge, 1981-2000", subtitle="7 Day Rolling Average",
+ fontface="bold")+
+ ylab("Annual Maximum Daily Discharge (cfs)")+
+ xlab("Year")+
+  geom_hline(yintercept = 116, color = "red3", lty=1, size = 1.5) +
+   annotate("text", x = 1984, y = 250, label = "10-Year Flood: 116 cfs", color = "red3", vjust = -0.5)+
+  ylim(0,400)
+mins_before2000_plot
+
+#Drought, 2001-2024
+mins_after2000_plot <-
+ggplot(late_flow_mins,
+ aes(x = flows.year, y= yearly_min))+
+ geom_col(position="dodge")+
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))+
+labs(title="Neuse River Annual Minimum Daily Discharge, 2001-2024", subtitle="7 Day Rolling Average",
+ fontface="bold")+
+ ylab("Annual Maximum Daily Discharge (cfs)")+
+ xlab("Year")+
+  geom_hline(yintercept = 176, color = "red3", lty=1, size = 1.5) +
+   annotate("text", x = 2010, y = 290, label = "10-Year Flood: 176 cfs", color = "red3", vjust = -0.5)+
+  ylim(0,400)
+mins_after2000_plot
+
+drought_layout <- plot_grid(mins_before2000_plot, mins_after2000_plot)
+drought_layout
 ```
